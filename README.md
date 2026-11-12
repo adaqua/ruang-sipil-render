@@ -6,7 +6,8 @@ because the VM that builds the videos has only ~1.5 CPU and ~600 MB free RAM.
 ## Layout
 
 - `scenes/<name>/` — one Three.js scene per folder (`index.html`, `main.js`,
-  `explode.js`, `vendor/` with the local three.js copy). A scene must set
+  `explode.js`). `vendor/` (three.js) is NOT committed — the workflow
+  downloads pinned three@0.169.0 from jsDelivr at render time. A scene must set
   `window.__ready = true` when it is ready to record.
 - `scripts/record.py`, `scripts/serve.py` — frame-exact recorder + static
   server, from [open-3d-skills](https://github.com/Moh4696/open-3d-skills)
