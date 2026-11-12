@@ -192,6 +192,10 @@ def launch(p, browser):
         # Linux + NVIDIA GPU (e.g. Google Colab T4): force ANGLE/EGL so WebGL
         # runs on the real GPU instead of SwiftShader.
         args += ["--use-gl=angle", "--use-angle=gl-egl"]
+    elif sys.platform.startswith("linux"):
+        # No GPU (GitHub runner, VM): force software WebGL via SwiftShader.
+        # Chromium >=137 gates software WebGL behind --enable-unsafe-swiftshader.
+        args += ["--enable-unsafe-swiftshader", "--use-gl=angle", "--use-angle=swiftshader"]
     exe = os.environ.get("CHROME_PATH")
     try:
         return p.chromium.launch(args=args, executable_path=exe) if exe else p.chromium.launch(args=args)
