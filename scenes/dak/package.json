@@ -1,5 +1,1 @@
-{
-  "dependencies": {
-    "three": "^0.169.0"
-  }
-}
+{"dependencies":{"three":"^0.169.0"},"name":"dak","private":true,"version":"1.0.0"}
