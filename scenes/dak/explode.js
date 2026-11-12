@@ -80,7 +80,7 @@ export class Labels {
     line.setAttribute("class", "leader");
     this.container.appendChild(el);
     this.svg.appendChild(line);
-    const item = { object, el, line, anchor: new THREE.Vector3(...anchor), focus: false };
+    const item = { object, el, line, anchor: new THREE.Vector3(...anchor), focus: false, alpha: 1 };
     this.items.push(item);
     return item;
   }
@@ -93,7 +93,7 @@ export class Labels {
       _v.copy(it.anchor);
       it.object.localToWorld(_v);
       _v.project(this.camera);
-      const visible = it.object.visible && _v.z < 1 && Math.abs(_v.x) < 1.05 && Math.abs(_v.y) < 1.05;
+      const visible = it.object.visible && _v.z < 1 && Math.abs(_v.x) < 1.05 && Math.abs(_v.y) < 1.05 && (it.alpha ?? 1) > 0.01;
       it.el.style.display = it.line.style.display = visible ? "" : "none";
       if (!visible) continue;
       it.sx = (_v.x * 0.5 + 0.5) * r.width;
