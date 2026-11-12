@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dak Beton — RuangSipil 3D test</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #e9edf1; }
+  #app { position: fixed; inset: 0; }
+  #app canvas { display: block; }
+  .labels { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  .label {
+    background: rgba(255, 255, 255, 0.95);
+    border: 1.5px solid #1f2937;
+    border-radius: 6px;
+    padding: 4px 9px;
+    font: 600 15px/1.25 system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: #111827;
+    letter-spacing: 0.02em;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+  }
+  .label span { display: block; font-weight: 500; font-size: 12px; color: #4b5563; }
+  .leader { stroke: #1f2937; stroke-width: 1.6; fill: none; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.js",
+    "three/addons/": "./vendor/addons/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app">
+  <div class="labels" id="labels"></div>
+</div>
+<script type="module" src="./main.js"></script>
+</body>
+</html>
