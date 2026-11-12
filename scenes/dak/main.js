@@ -2,9 +2,9 @@
 // Combined style: SMECO visual language (three.js, ACES, soft shadows, floating
 // labels, focus/isolation) + CADAnimation CAD look (outlines, grid, cutting plane,
 // annotations) + open-3d-skills exploded-view (staged explode, x-ray, leader lines).
-// All geometry built from code, no model files. Timeline is 10 s, driven by
+// All geometry built from code, no model files. Timeline is 30 s, driven by
 // window.__recordFrame(t) under the frame-capture virtual clock, or by rAF when
-// viewed live (loops every 10 s).
+// viewed live (loops every 30 s).
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { Exploder, Labels, Section } from "./explode.js";
@@ -229,6 +229,19 @@ const droplet = new THREE.Mesh(new THREE.SphereGeometry(0.028, 12, 12), dropMat)
 droplet.visible = false;
 tilt.add(droplet);
 
+// --- clean top flow (solution): rain water runs over the membrane to the drain
+const topFlowPts = [
+  new THREE.Vector3(0.55, 0.1, 0.15),
+  new THREE.Vector3(0.0, 0.1, 0.2),
+  new THREE.Vector3(-0.6, 0.095, 0.25),
+  new THREE.Vector3(-1.05, 0.09, 0.3),
+  new THREE.Vector3(-1.18, 0.05, 0.35),
+];
+const topFlowCurve = new THREE.CatmullRomCurve3(topFlowPts);
+const topFlowMat = new THREE.MeshBasicMaterial({ color: 0x35a7ff, transparent: true, opacity: 0 });
+const topFlowTube = new THREE.Mesh(new THREE.TubeGeometry(topFlowCurve, 32, 0.014, 8), topFlowMat);
+tilt.add(topFlowTube);
+
 // --- drain pipe + gutter (outside the tilted group, static)
 const drain = new THREE.Group();
 drain.position.set(-1.22, 0.55, 0.4);
@@ -258,56 +271,103 @@ for (const m of [steelMat]) {
 // ---------------------------------------------------------------- labels
 const labelsEl = document.getElementById("labels");
 const labels = new Labels(labelsEl, camera, renderer.domElement);
-labels.add(slab, "DAK BETON", { anchor: [1.0, 0.07, 0.45] });
-labels.add(rebarTop, "TULANGAN", { anchor: [-0.5, 0.05, -0.7] });
-labels.add(crack, "RETAK SUSUT", { anchor: [0.15, 0.09, 0.4] });
-labels.add(membrane, "WATERPROOFING", { anchor: [-0.9, 0.01, -0.5] });
-labels.add(slab, "KEMIRINGAN 1-2%", { anchor: [1.15, 0.07, -0.4] });
-labels.add(drain, "SALURAN", { anchor: [0, 0.3, 0] });
+const lbDak = labels.add(slab, "DAK BETON", { anchor: [1.0, 0.07, 0.45] });
+const lbRebar = labels.add(rebarTop, "TULANGAN", { anchor: [-0.5, 0.05, -0.7] });
+const lbCrack = labels.add(crack, "RETAK SUSUT", { anchor: [0.15, 0.09, 0.4] });
+const lbMembrane = labels.add(membrane, "WATERPROOFING", { anchor: [-0.9, 0.01, -0.5] });
+const lbSlope = labels.add(slab, "KEMIRINGAN 1-2%", { anchor: [1.15, 0.07, -0.4] });
+const lbDrain = labels.add(drain, "SALURAN", { anchor: [0, 0.3, 0] });
+// solution label: appears only once the assembly is fixed again
+const lbFixed = labels.add(slab, "DAK AMAN", { anchor: [0.3, 0.08, 0.0] });
+lbFixed.el.classList.add("ok");
+lbFixed.line.classList.add("ok");
 
-// ---------------------------------------------------------------- choreography (10 s)
+// ---------------------------------------------------------------- choreography (30 s)
+//   0-4 s:  assembled slab, ponding water, slow dolly-in, DAK BETON label
+//   4-12 s: staged explode (membrane lifts, rebar separates, slab X-ray,
+//           crack glows red, blue water flows to the drain), labels one by one
+//  12-20 s: hold fully exploded, all 6 labels visible
+//  20-26 s: reverse explode, membrane returns with a green glow (solution),
+//           DAK AMAN label, clean water flows over the top to the drain
+//  26-30 s: hold assembled, DAK AMAN label
 const target = new THREE.Vector3(-0.25, 1.0, 0);
 const baseDir = new THREE.Vector3(0.58, 0.40, 1.0).normalize();
 const crackDark = new THREE.Color(0x8a150c);
 const crackBright = new THREE.Color(0xff2a1a);
 
+// per-label fade: sets opacity on the pill + leader line and tells the layout
+// to skip the label while fully transparent (so hidden labels don't reserve space)
+function setLabel(item, k) {
+  const o = clamp01(k);
+  item.alpha = o;
+  item.el.style.opacity = o;
+  item.line.style.opacity = o;
+}
+
 function applyState(t) {
-  const e = smooth((t - 2) / 5);            // 2-7 s: staged explode
+  // explode factor: up 4-12 s, hold to 20 s, reverse 20-26 s
+  const eUp = smooth((t - 4) / 8);
+  const eDown = smooth((t - 20) / 6);
+  const e = eUp * (1 - eDown);
   ex.set(e);
 
-  // slab goes ghostly (x-ray) as it explodes
+  // slab goes ghostly (x-ray) as it explodes, solid again on the reverse
   slabMat.opacity = 1 - 0.8 * e;
   slabMat.transparent = e > 0.01;
   slabMat.depthWrite = e < 0.4;
   slabMat.needsUpdate = true;
 
-  // crack heats up from dull to neon red
+  // crack heats up from dull to neon red with the explode, cools on reverse
   crackMat.color.lerpColors(crackDark, crackBright, 0.3 + 0.7 * e);
   crackGlowMat.opacity = 0.15 + 0.45 * e;
   crackLight.intensity = 0.6 * e;
 
-  // ponding drains away 2-4 s
-  pondMat.opacity = 0.55 * (1 - clamp01((t - 2) / 2));
+  // membrane green solution glow: fades in 21-24 s, holds to the end
+  const glow = smooth((t - 21) / 3);
+  membraneMat.emissive.setHex(0x16a34a);
+  membraneMat.emissiveIntensity = 0.5 * glow;
+
+  // ponding drains away 4-7 s, stays gone
+  pondMat.opacity = 0.55 * (1 - clamp01((t - 4) / 3));
   pond.visible = pondMat.opacity > 0.01;
 
-  // blue seepage appears 2.5-4.5 s, droplet travels to the drain
-  const f = clamp01((t - 2.5) / 2);
-  flowMat.opacity = f * 0.95;
-  droplet.visible = f > 0.15;
-  if (droplet.visible) {
-    const s = ((t - 2.5) / 2.4) % 1;
-    flowCurve.getPointAt(s, droplet.position);
+  // blue seepage (leak path) follows the explode factor
+  flowMat.opacity = e * 0.95;
+  // clean top flow (solution): fades in 21-23 s, holds to the end
+  const tf = smooth((t - 21) / 2);
+  topFlowMat.opacity = tf * 0.9;
+  // droplet: leak path while exploded, clean path after the fix
+  if (t < 20.5) {
+    droplet.visible = e > 0.15;
+    if (droplet.visible) {
+      const s = ((t - 4) / 6) % 1;
+      flowCurve.getPointAt(s, droplet.position);
+    }
+  } else {
+    droplet.visible = tf > 0.15;
+    if (droplet.visible) {
+      const s = ((t - 21) / 5) % 1;
+      topFlowCurve.getPointAt(s, droplet.position);
+    }
   }
 
-  // neon slope arrows fade in and pulse
-  const a = clamp01((t - 3) / 1.5);
+  // neon slope arrows: in with the explode, out on the reverse
+  const a = clamp01((t - 5) / 1.5) * (1 - clamp01((t - 20) / 2));
   arrowMats.forEach((m, i) => { m.opacity = a * (0.6 + 0.4 * Math.sin(t * 3 + i * 1.7)); });
 
-  // labels fade in during the explode, fully visible on the hold
-  labelsEl.style.opacity = clamp01((t - 2) / 1.5);
+  // labels one by one, following their stage; the six problem labels fade
+  // out on the reverse (21-23.5 s), DAK AMAN fades in for the fix
+  const out = 1 - smooth((t - 21) / 2.5);
+  setLabel(lbDak, smooth((t - 0.5) / 1.5) * out);
+  setLabel(lbMembrane, smooth((t - 4.5) / 1) * out);
+  setLabel(lbCrack, smooth((t - 6.5) / 1) * out);
+  setLabel(lbRebar, smooth((t - 8) / 1) * out);
+  setLabel(lbSlope, smooth((t - 9.5) / 1) * out);
+  setLabel(lbDrain, smooth((t - 11) / 1) * out);
+  setLabel(lbFixed, smooth((t - 22.5) / 2));
 
-  // camera: slow dolly-in 0-2 s, pull back as it explodes, gentle sway
-  const dist = 6.9 - 0.5 * smooth(t / 2) + 0.8 * e;
+  // camera: slow dolly-in 0-4 s, pull back as it explodes, back in on reverse
+  const dist = 6.9 - 0.5 * smooth(t / 4) + 0.8 * e;
   const az = 0.05 * Math.sin(t * 0.25);
   const dir = baseDir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), az);
   camera.position.copy(target).addScaledVector(dir, dist);
@@ -316,10 +376,10 @@ function applyState(t) {
 
 // ---------------------------------------------------------------- frame loop
 let currentT = 0;
-window.__recordFrame = (t) => { currentT = Math.min(t, 10); };
+window.__recordFrame = (t) => { currentT = Math.min(t, 30); };
 
 function frame() {
-  const t = window.__recording ? currentT : (performance.now() / 1000) % 10;
+  const t = window.__recording ? currentT : (performance.now() / 1000) % 30;
   applyState(t);
   renderer.render(scene, camera);
   labels.update();
