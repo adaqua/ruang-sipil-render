@@ -22,6 +22,10 @@ name: Render 3D scene
 permissions:
   contents: write
 
+concurrency:
+  group: render
+  cancel-in-progress: false
+
 on:
   push:
     paths:
@@ -52,7 +56,7 @@ jobs:
     timeout-minutes: 60
     env:
       SCENE: ${{ inputs.scene || 'dak' }}
-      SECONDS: ${{ inputs.seconds || '10' }}
+      DURATION: ${{ inputs.seconds || '10' }}
       FPS: ${{ inputs.fps || '60' }}
       SIZE: ${{ inputs.size || '720x1280' }}
     steps:
@@ -90,28 +94,28 @@ jobs:
         run: |
           python3 scripts/record.py \
             "http://127.0.0.1:8000/${SCENE}/?record=1" \
-            "${SCENE}-${SECONDS}s.mp4" \
-            --seconds "${SECONDS}" \
+            "${SCENE}-${DURATION}s.mp4" \
+            --seconds "${DURATION}" \
             --fps "${FPS}" \
             --size "${SIZE}" \
             --ready "window.__ready === true"
           ls -la *.mp4
           ffprobe -v error -show_entries format=duration \
-            -of csv=p=0 "${SCENE}-${SECONDS}s.mp4"
+            -of csv=p=0 "${SCENE}-${DURATION}s.mp4"
 
       - name: Upload MP4 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.SCENE }}-${{ env.SECONDS }}s
-          path: ${{ env.SCENE }}-${{ env.SECONDS }}s.mp4
+          name: ${{ env.SCENE }}-${{ env.DURATION }}s
+          path: ${{ env.SCENE }}-${{ env.DURATION }}s.mp4
           retention-days: 7
 
       - name: Commit MP4 back to renders/
         run: |
           mkdir -p renders
-          cp "${SCENE}-${SECONDS}s.mp4" "renders/${SCENE}-${SECONDS}s.mp4"
+          cp "${SCENE}-${DURATION}s.mp4" "renders/${SCENE}-${DURATION}s.mp4"
           git config user.name "ruang-sipil-render"
           git config user.email "render@ruangsipil.local"
-          git add "renders/${SCENE}-${SECONDS}s.mp4"
-          git commit -m "Render ${SCENE} ${SECONDS}s @ ${FPS}fps ${SIZE}" || echo "nothing to commit"
+          git add "renders/${SCENE}-${DURATION}s.mp4"
+          git commit -m "Render ${SCENE} ${DURATION}s @ ${FPS}fps ${SIZE}" || echo "nothing to commit"
           git push
